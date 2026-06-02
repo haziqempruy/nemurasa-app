@@ -21,8 +21,7 @@ class AuthProvider with ChangeNotifier {
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       if (googleUser == null) return;
 
-      // Kita kembalikan await di sini karena bawaan package membutuhkannya
-      final GoogleSignInAuthentication googleAuth = googleUser.authentication;
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
       final String? idToken = googleAuth.idToken;
       final String? accessToken = googleAuth.accessToken;
       

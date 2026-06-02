@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "807386950190",
+    "project_id": "nemurasa",
+    "storage_bucket": "nemurasa.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:807386950190:android:b5861f6e6ffff41904cdbf",
+        "android_client_info": {
+          "package_name": "com.example.nemurasa"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "807386950190-d26o36ovnkcgubur8dv2hihm5q2avaoj.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.nemurasa",
+            "certificate_hash": "7563434829da4c7c70856cc08ca00a84a2b2c3b8"
+          }
+        },
+        {
+          "client_id": "807386950190-i3q2mfmgr8hcesseqvh540fvamh80ij0.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC3abSklEilLujTqzlpd3BMpz-9DOm9iJQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "807386950190-i3q2mfmgr8hcesseqvh540fvamh80ij0.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "807386950190-61p0g7rt21s2akt4v0luob6keub40mv4.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.nemurasa"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

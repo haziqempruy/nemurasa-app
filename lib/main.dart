@@ -2,21 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 
-import 'firebase_options.dart'; // File otomatis dari flutterfire configure
+import 'firebase_options.dart';
 import 'providers/auth_provider.dart';
 import 'screens/onboarding_screen.dart';
+import 'screens/home_screen.dart';  
 
 void main() async {
-  // Wajib dipanggil sebelum inisialisasi Firebase
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Inisialisasi Firebase
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
   runApp(
-    // Membungkus aplikasi dengan Provider
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (context) => AuthProvider()),
@@ -42,7 +40,25 @@ class MyApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: const OnboardingScreen(),
+       
+      home: Consumer<AuthProvider>(
+        builder: (context, auth, _) {
+          
+          if (auth.isLoading) {
+            return const Scaffold(
+              body: Center(
+                child: CircularProgressIndicator(),
+              ),
+            );
+          }
+           
+          if (auth.user != null) {
+             return const HomeScreen();
+          }
+           
+          return const OnboardingScreen();
+        },
+      ),
     );
   }
 }

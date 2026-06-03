@@ -18,7 +18,7 @@ class OnboardingScreen extends StatelessWidget {
             ),
           ),
 
-          // 2. Gradient Overlay (Tanpa withOpacity agar terhindar dari warning)
+         
           Positioned.fill(
             child: Container(
               decoration: const BoxDecoration(
@@ -26,7 +26,7 @@ class OnboardingScreen extends StatelessWidget {
                   begin: Alignment.bottomCenter,
                   end: Alignment.topCenter,
                   colors: [
-                    Color.fromRGBO(0, 88, 188, 0.9), // Primary 0xFF0058BC
+                    Color.fromRGBO(0, 88, 188, 0.9),  
                     Color.fromRGBO(0, 88, 188, 0.4),
                     Colors.transparent,
                   ],
@@ -36,7 +36,7 @@ class OnboardingScreen extends StatelessWidget {
             ),
           ),
 
-          // 3. Konten Teks & Tombol
+           
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
@@ -44,13 +44,13 @@ class OnboardingScreen extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.end,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  const Text(
-                    'NemuRasa',
-                    style: TextStyle(
-                      color: Color(0xFFADC6FF),
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.5,
+                  
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.asset(
+                      'assets/images/nemurasa-logo2.png',
+                      height: 90, 
+                      fit: BoxFit.contain,
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -69,7 +69,7 @@ class OnboardingScreen extends StatelessWidget {
                     'Temukan kuliner autentik yang tersembunyi di setiap sudut nusantara.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: Color.fromRGBO(173, 198, 255, 0.9), // 0xFFADC6FF
+                      color: Color.fromRGBO(173, 198, 255, 0.9),  
                       fontSize: 16,
                     ),
                   ),

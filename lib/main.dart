@@ -1,31 +1,23 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:provider/provider.dart';
-
-import 'firebase_options.dart';
-import 'providers/auth_provider.dart';
-import 'screens/onboarding_screen.dart';
-import 'screens/home_screen.dart';  
+import 'package:shared_preferences/shared_preferences.dart';
+import 'screens/home_screen.dart';
+import 'screens/login_screen.dart';
 
 void main() async {
+  // Wajib dipanggil sebelum mengecek data bawaan sistem (SharedPreferences)
   WidgetsFlutterBinding.ensureInitialized();
   
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  // Buka brankas untuk mengecek apakah ada token yang tersimpan
+  final prefs = await SharedPreferences.getInstance();
+  final token = prefs.getString('token');
 
-  runApp(
-    MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (context) => AuthProvider()),
-      ],
-      child: const MyApp(),
-    ),
-  );
+  // Jalankan aplikasi dengan membawa status token tersebut
+  runApp(MyApp(token: token));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final String? token;
+  const MyApp({super.key, this.token});
 
   @override
   Widget build(BuildContext context) {
@@ -33,32 +25,12 @@ class MyApp extends StatelessWidget {
       title: 'NemuRasa',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        fontFamily: 'PlusJakartaSans',
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF0058BC),
-          surface: const Color(0xFFF9F9FF),
-        ),
-        useMaterial3: true,
+        primaryColor: const Color(0xFF0058BC),
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0058BC)),
       ),
-       
-      home: Consumer<AuthProvider>(
-        builder: (context, auth, _) {
-          
-          if (auth.isLoading) {
-            return const Scaffold(
-              body: Center(
-                child: CircularProgressIndicator(),
-              ),
-            );
-          }
-           
-          if (auth.user != null) {
-             return const HomeScreen();
-          }
-           
-          return const OnboardingScreen();
-        },
-      ),
+      // Logika Penentuan Halaman Pertama:
+      // Jika token tidak kosong (null), langsung ke Home. Jika kosong, arahkan ke Login.
+      home: token != null ? const HomeScreen() : const LoginScreen(),
     );
   }
 }

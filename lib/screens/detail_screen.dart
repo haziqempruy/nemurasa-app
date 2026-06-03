@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart'; // 1. Tambahkan import brankas
 
 class DetailScreen extends StatefulWidget {
   final Map<String, dynamic> place;
@@ -14,11 +15,9 @@ class DetailScreen extends StatefulWidget {
 class _DetailScreenState extends State<DetailScreen> {
   final TextEditingController _reviewController = TextEditingController();
   int _selectedRating = 5;
-  bool _isSubmitting = false; // Penanda untuk animasi loading di tombol
+  bool _isSubmitting = false; 
 
-  // Fungsi Create (POST) untuk mengirim ulasan
   Future<void> _submitReview() async {
-    // Pastikan IP Address sama dengan yang ada di HomeScreen
     const String apiUrl = 'http://192.168.0.77:8000/api/reviews';
 
     setState(() {
@@ -26,6 +25,10 @@ class _DetailScreenState extends State<DetailScreen> {
     });
 
     try {
+      // 2. Buka brankas untuk mengambil user_id orang yang sedang login
+      final prefs = await SharedPreferences.getInstance();
+      final currentUserId = prefs.getInt('user_id') ?? 1; // Default ke 1 jika terjadi anomali
+
       final response = await http.post(
         Uri.parse(apiUrl),
         headers: {
@@ -34,6 +37,7 @@ class _DetailScreenState extends State<DetailScreen> {
         },
         body: jsonEncode({
           'place_id': widget.place['id'],
+          'user_id': currentUserId, // 3. SELIPKAN KTP (USER ID) DI SINI!
           'rating_keaslian': _selectedRating,
           'review_text': _reviewController.text,
         }),
@@ -41,14 +45,12 @@ class _DetailScreenState extends State<DetailScreen> {
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         if (mounted) {
-          // Tampilkan notifikasi sukses
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Ulasan Keaslian Rasa berhasil dikirim!'),
               backgroundColor: Colors.green,
             ),
           );
-          // Bersihkan form setelah sukses
           _reviewController.clear();
           setState(() {
             _selectedRating = 5;
@@ -204,7 +206,6 @@ class _DetailScreenState extends State<DetailScreen> {
                   ),
                   const SizedBox(height: 20),
                   
-                  // Tombol Kirim yang sudah dihubungkan dengan API
                   ElevatedButton(
                     onPressed: _isSubmitting ? null : _submitReview,
                     style: ElevatedButton.styleFrom(

@@ -1,9 +1,11 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:provider/provider.dart';
-import '../providers/auth_provider.dart';
-import 'detail_screen.dart';  
+import 'package:shared_preferences/shared_preferences.dart'; // Tambahan untuk memanggil brankas
+
+import 'detail_screen.dart';
+import 'profile_screen.dart';
+import 'login_screen.dart'; // Tambahan untuk fungsi Logout
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -15,19 +17,77 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
   
-  // Variabel untuk menampung data dari Laravel
+  // Variabel untuk menampung data
   List<dynamic> _places = [];
   bool _isLoading = true;
+  String _userName = 'Tamu'; // Variabel baru untuk nama
 
   @override
   void initState() {
     super.initState();
-    _fetchPlaces(); // Panggil fungsi ambil data saat layar pertama kali dibuka
+    _loadUserSession(); // Ambil nama saat layar dibuka
+    _fetchPlaces(); 
   }
 
-  // Fungsi Asynchronous untuk mengambil API (Bagian dari rubrik 35%)
+  // --- FUNGSI BARU: Ambil Nama dari Brankas ---
+  Future<void> _loadUserSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      // Ambil nama dari brankas, jika kosong default ke 'Hunter'
+      String fullName = prefs.getString('user_name') ?? 'Hunter';
+      // Potong agar yang tampil hanya kata pertama (nama panggilan)
+      _userName = fullName.split(' ')[0];
+    });
+  }
+
+// --- FUNGSI 1: Proses Eksekusi Logout ---
+  Future<void> _executeLogout() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear(); // Hapus token dan semua data di brankas
+    
+    if (mounted) {
+      // Lempar kembali ke halaman Login dan hapus histori rute
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        (route) => false,
+      );
+    }
+  }
+
+  // --- FUNGSI 2: Menampilkan Pop-up Konfirmasi ---
+  void _showLogoutConfirmation() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Keluar Aplikasi', style: TextStyle(fontWeight: FontWeight.bold)),
+          content: const Text('Apakah kamu yakin ingin keluar dari NemuRasa?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context), // Tutup dialog jika Batal
+              child: const Text('Batal', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context); // Tutup dialog dulu
+                _executeLogout(); // Baru jalankan proses logout
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Text('Logout', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      }
+    );
+  }
+
+  // Fungsi Asynchronous untuk mengambil API
   Future<void> _fetchPlaces() async {
-    // IP fisik HP kamu
     const String apiUrl = 'http://192.168.0.77:8000/api/places'; 
 
     try {
@@ -36,7 +96,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         setState(() {
-          _places = data['data']; // Masukkan array dari Laravel ke variabel Flutter
+          _places = data['data']; 
           _isLoading = false;
         });
       } else {
@@ -57,44 +117,57 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = context.watch<AuthProvider>().user;
-    final userName = user?.displayName?.split(' ')[0] ?? 'Tamu';
+    // KODE YANG BIKIN ERROR (Provider) SUDAH DIHAPUS DARI SINI
 
     return Scaffold(
       backgroundColor: const Color(0xFFF9F9FF),
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        title: Row(
           children: [
-            Text(
-              'Halo, $userName! 👋',
-              style: const TextStyle(
-                color: Color(0xFF414755),
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+            Image.asset(
+              'assets/images/nemurasa-logo.png', // Logo kamu aman di sini
+              height: 36, 
+              fit: BoxFit.contain,
             ),
-            const Text(
-              'Mau eksplor rasa apa hari ini?',
-              style: TextStyle(color: Colors.grey, fontSize: 12),
+            const SizedBox(width: 12), 
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Halo, $_userName! 👋', // Menggunakan variabel state yang baru
+                    style: const TextStyle(
+                      color: Color(0xFF414755),
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis, 
+                  ),
+                  const Text(
+                    'Mau eksplor rasa apa hari ini?',
+                    style: TextStyle(color: Colors.grey, fontSize: 12),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
-        actions: [
+actions: [
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.redAccent),
             tooltip: 'Keluar',
-            onPressed: () {
-              context.read<AuthProvider>().signOut();
-            },
+            onPressed: _showLogoutConfirmation, // <--- UBAH BAGIAN INI
           ),
         ],
       ),
       body: _selectedIndex == 0 
-          ? _buildHomeContent() 
-          : const Center(child: Text('Halaman Eksplor/Profil Belum Tersedia')),
+       ? _buildHomeContent() 
+       : _selectedIndex == 2
+           ? const ProfileScreen()
+           : const Center(child: Text('Halaman Eksplor Belum Tersedia')),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
@@ -110,27 +183,22 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildHomeContent() {
-    // Tampilkan animasi loading saat data masih ditarik dari Laravel
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    // Tampilkan pesan jika database kosong
     if (_places.isEmpty) {
       return const Center(child: Text('Belum ada data kuliner legendaris.'));
     }
 
-    // Bangun daftar UI (List) sesuai dengan data JSON
     return ListView.builder(
       padding: const EdgeInsets.all(16.0),
       itemCount: _places.length,
       itemBuilder: (context, index) {
         final place = _places[index];
         
-        // --- BAGIAN INI YANG DITAMBAHKAN (InkWell untuk navigasi) ---
         return InkWell(
           onTap: () {
-            // Berpindah ke DetailScreen sambil membawa data 'place'
             Navigator.push(
               context,
               MaterialPageRoute(
@@ -146,7 +214,6 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Gambar dari Database
                 Image.network(
                   place['main_image'] ?? 'https://via.placeholder.com/600x400',
                   height: 180,
@@ -165,7 +232,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Label Premium untuk Sponsored Discovery
                             if (place['is_premium'] == 1)
                               Container(
                                 margin: const EdgeInsets.only(bottom: 4),
@@ -179,7 +245,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                   style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
                                 ),
                               ),
-                            // Nama Warung dari Database
                             Text(
                               place['name'] ?? 'Tanpa Nama',
                               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
@@ -189,7 +254,6 @@ class _HomeScreenState extends State<HomeScreen> {
                               children: [
                                 const Icon(Icons.location_on, size: 14, color: Colors.grey),
                                 const SizedBox(width: 4),
-                                // Alamat dari Database
                                 Expanded(
                                   child: Text(
                                     place['address'] ?? '-', 

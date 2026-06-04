@@ -20,7 +20,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscurePassword = true;
 
   // Sesuaikan IP dengan API Laravel kamu
-  final String _apiUrl = 'http://192.168.0.77:8000/api/login';
+  final String _apiUrl = 'http://192.168.0.136:8000/api/login';
 
   Future<void> _login() async {
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {

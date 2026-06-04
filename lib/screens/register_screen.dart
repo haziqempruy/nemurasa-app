@@ -19,7 +19,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscurePassword = true;
 
   // Sesuaikan IP dengan API Laravel kamu
-  final String _apiUrl = 'http://192.168.0.77:8000/api/register';
+  final String _apiUrl = 'http://192.168.0.136:8000/api/register';
 
   Future<void> _register() async {
     if (_nameController.text.isEmpty || _emailController.text.isEmpty || _passwordController.text.isEmpty) {

@@ -1,34 +1,50 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart'; // Tambahan untuk memanggil brankas
+import 'package:shared_preferences/shared_preferences.dart'; 
+
+// --- TAMBAHAN IMPORT PROVIDER ---
+import 'package:provider/provider.dart'; 
+import '../providers/review_provider.dart'; 
+// --------------------------------
 
 import 'detail_screen.dart';
 import 'profile_screen.dart';
-import 'login_screen.dart'; // Tambahan untuk fungsi Logout
+import 'login_screen.dart'; 
+import 'explore_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final int initialIndex; // Tambahkan ini
+  final Map<String, dynamic>? selectedPlace; // Tambahkan ini
+
+  // Beri nilai default index 0 (Beranda) agar jika dibuka biasa tidak error
+  const HomeScreen({super.key, this.initialIndex = 0, this.selectedPlace});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _selectedIndex = 0;
+  late int _selectedIndex; // Ubah menjadi late
   
-  // Variabel untuk menampung data
   List<dynamic> _places = [];
   bool _isLoading = true;
-  String _userName = 'Tamu'; // Variabel baru untuk nama
+  String _userName = 'Tamu'; 
 
   @override
   void initState() {
     super.initState();
-    _loadUserSession(); // Ambil nama saat layar dibuka
+    _selectedIndex = widget.initialIndex; // Set index sesuai titipan
+    
+    _loadUserSession(); 
     _fetchPlaces(); 
+    
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<ReviewProvider>(context, listen: false).addListener(() {
+        if (mounted) _fetchPlaces(); 
+      });
+    });
   }
-
   // --- FUNGSI BARU: Ambil Nama dari Brankas ---
   Future<void> _loadUserSession() async {
     final prefs = await SharedPreferences.getInstance();
@@ -88,7 +104,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Fungsi Asynchronous untuk mengambil API
   Future<void> _fetchPlaces() async {
-    const String apiUrl = 'http://192.168.0.77:8000/api/places'; 
+    // Pastikan IP ini selalu sama dengan IP yang sedang aktif ya!
+    const String apiUrl = 'http://192.168.0.136:8000/api/places'; 
 
     try {
       final response = await http.get(Uri.parse(apiUrl));
@@ -109,16 +126,18 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _onItemTapped(int index) {
+ void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
     });
+    
+    
+    if (index == 0) {
+      _fetchPlaces(); 
+    }
   }
-
   @override
   Widget build(BuildContext context) {
-    // KODE YANG BIKIN ERROR (Provider) SUDAH DIHAPUS DARI SINI
-
     return Scaffold(
       backgroundColor: const Color(0xFFF9F9FF),
       appBar: AppBar(
@@ -155,19 +174,19 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ],
         ),
-actions: [
+        actions: [
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.redAccent),
             tooltip: 'Keluar',
-            onPressed: _showLogoutConfirmation, // <--- UBAH BAGIAN INI
+            onPressed: _showLogoutConfirmation, 
           ),
         ],
       ),
-      body: _selectedIndex == 0 
+body: _selectedIndex == 0 
        ? _buildHomeContent() 
-       : _selectedIndex == 2
-           ? const ProfileScreen()
-           : const Center(child: Text('Halaman Eksplor Belum Tersedia')),
+       : _selectedIndex == 1 // Jika index 1, panggil ExploreScreen
+           ? ExploreScreen(selectedPlace: widget.selectedPlace) 
+           : const ProfileScreen(),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,

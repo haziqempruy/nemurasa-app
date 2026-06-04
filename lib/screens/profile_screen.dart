@@ -3,7 +3,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // Tambahan import brankas
+import 'package:shared_preferences/shared_preferences.dart'; 
+import 'package:provider/provider.dart'; // --- IMPORT PROVIDER ---
+import '../providers/review_provider.dart'; // --- IMPORT PROVIDER ---
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -21,7 +23,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? _avatarUrl;
 
   // Sesuaikan dengan IP laptopmu
-  final String _baseUrl = 'http://192.168.0.77:8000/api';
+  final String _baseUrl = 'http://192.168.0.136:8000/api';
   
   // Ubah dari 'final int = 1' menjadi variabel dinamis
   int _currentUserId = 0; 
@@ -58,16 +60,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final response = await http.get(Uri.parse('$_baseUrl/users/$_currentUserId'));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
+        
+        // --- TAMBAHAN SINKRONISASI BRANKAS ---
+        final prefs = await SharedPreferences.getInstance();
+        if (data['avatar_url'] != null) {
+          await prefs.setString('avatar_url', data['avatar_url']); // Simpan foto baru
+        } else {
+          await prefs.remove('avatar_url'); // Buang foto dari brankas jika dihapus
+        }
+        // -------------------------------------
+
         setState(() {
           _userName = data['data']['name'];
-          _avatarUrl = data['avatar_url']; // URL dari Laravel storage
+          _avatarUrl = data['avatar_url']; 
         });
       }
     } catch (e) {
       debugPrint("Error ambil data user: $e");
     }
   }
-
   // Memilih gambar dari Galeri dan langsung mengunggahnya
   Future<void> _pickAndUploadImage() async {
     final picker = ImagePicker();
@@ -200,6 +211,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (response.statusCode == 200) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ulasan berhasil dihapus')));
         _fetchMyReviews(); 
+        
+        // --- TRIGGER PROVIDER DI SINI (Saat Berhasil Hapus) ---
+        if (mounted) {
+          Provider.of<ReviewProvider>(context, listen: false).triggerRefresh();
+        }
       }
     } catch (e) {
       debugPrint("Error hapus: $e");
@@ -281,6 +297,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (response.statusCode == 200) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ulasan berhasil diperbarui')));
         _fetchMyReviews(); 
+        
+        // --- TRIGGER PROVIDER DI SINI (Saat Berhasil Edit) ---
+        if (mounted) {
+          Provider.of<ReviewProvider>(context, listen: false).triggerRefresh();
+        }
       }
     } catch (e) {
       debugPrint("Error update: $e");
@@ -313,7 +334,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               child: Row(
                 children: [
-                  // Avatar Interaktif (Bisa Ditekan)
                   GestureDetector(
                     onTap: _showAvatarOptions,
                     child: Stack(
@@ -323,7 +343,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           backgroundColor: Colors.grey.shade300,
                           backgroundImage: _avatarUrl != null 
                               ? NetworkImage(_avatarUrl!) 
-                              // URL Avatar dibuat dinamis mengikuti _userName
                               : NetworkImage('https://ui-avatars.com/api/?name=$_userName&background=0058BC&color=fff&size=120') as ImageProvider,
                         ),
                         Positioned(
@@ -343,7 +362,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   const SizedBox(width: 20),
                   
-                  // Informasi Teks
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -424,32 +442,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Row(
-  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-  children: [
-    // 1. Bungkus Text dengan Expanded agar tidak egois memakan tempat
-    Expanded(
-      child: Text(
-        review['place'] != null ? review['place']['name'] : 'Kuliner',
-        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-        maxLines: 1, // Batasi maksimal 1 baris
-        overflow: TextOverflow.ellipsis, // Tambahkan titik-titik (...) jika teks kepanjangan
-      ),
-    ),
-    
-    const SizedBox(width: 8), // Jarak napas antara teks dan bintang
-    
-    // 2. Jejeran Bintang
-    Row(
-      children: List.generate(
-        5, 
-        (starIndex) => Icon(
-          starIndex < review['rating_keaslian'] ? Icons.star : Icons.star_border,
-          color: Colors.amber, size: 16,
-        )
-      ),
-    ),
-  ],
-),
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        review['place'] != null ? review['place']['name'] : 'Kuliner',
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                        maxLines: 1, 
+                                        overflow: TextOverflow.ellipsis, 
+                                      ),
+                                    ),
+                                    
+                                    const SizedBox(width: 8), 
+                                    
+                                    Row(
+                                      children: List.generate(
+                                        5, 
+                                        (starIndex) => Icon(
+                                          starIndex < review['rating_keaslian'] ? Icons.star : Icons.star_border,
+                                          color: Colors.amber, size: 16,
+                                        )
+                                      ),
+                                    ),
+                                  ],
+                                ),
                                 const SizedBox(height: 12),
                                 Text(
                                   review['review_text'] ?? '',

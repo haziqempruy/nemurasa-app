@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart'; // Tambahan import provider
+import 'providers/review_provider.dart'; // Tambahan import file provider
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 
@@ -11,8 +13,16 @@ void main() async {
   final prefs = await SharedPreferences.getInstance();
   final token = prefs.getString('token');
 
-  // Jalankan aplikasi dengan membawa status token tersebut
-  runApp(MyApp(token: token));
+  // Jalankan aplikasi dengan membawa status token tersebut, 
+  // dan BUNGKUS dengan MultiProvider agar state management berjalan!
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ReviewProvider()),
+      ],
+      child: MyApp(token: token),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {

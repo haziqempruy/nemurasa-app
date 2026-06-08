@@ -2,7 +2,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart'; 
-import 'home_screen.dart';
+import 'package:provider/provider.dart'; // Tambahan Import Provider
+import '../providers/review_provider.dart'; // Tambahan Import ReviewProvider
+
+import 'home_screen.dart'; 
 
 class DetailScreen extends StatefulWidget {
   final Map<String, dynamic> place;
@@ -17,6 +20,8 @@ class _DetailScreenState extends State<DetailScreen> {
   final TextEditingController _reviewController = TextEditingController();
   int _selectedRating = 5;
   bool _isSubmitting = false; 
+  String _selectedFilter = 'Terbaru'; 
+  int _currentImageIndex = 0;
 
   String formatTanggal(dynamic dateData) {
     if (dateData == null || dateData.toString().isEmpty) return '';
@@ -35,8 +40,7 @@ class _DetailScreenState extends State<DetailScreen> {
   }
 
   Future<void> _submitReview() async {
-    // Pastikan IP ini sesuai dengan komputermu ya
-    const String apiUrl = 'http://192.168.0.136:8000/api/reviews';
+    const String apiUrl = 'http://192.168.0.70:8000/api/reviews';
 
     setState(() {
       _isSubmitting = true;
@@ -46,7 +50,7 @@ class _DetailScreenState extends State<DetailScreen> {
       final prefs = await SharedPreferences.getInstance();
       final currentUserId = prefs.getInt('user_id') ?? 1; 
       final currentUserName = prefs.getString('user_name') ?? 'Hunter (Saya)';
-      final currentUserAvatar = prefs.getString('avatar_url'); // Opsional jika kamu menyimpan URL avatar di brankas
+      final currentUserAvatar = prefs.getString('avatar_url'); 
 
       final response = await http.post(
         Uri.parse(apiUrl),
@@ -64,13 +68,11 @@ class _DetailScreenState extends State<DetailScreen> {
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         if (mounted) {
-          // --- OPTIMISTIC UI UPDATE ---
           setState(() {
             if (widget.place['reviews'] == null) {
               widget.place['reviews'] = [];
             }
 
-            // Sisipkan ke paling atas dengan format yang mendukung Avatar
             widget.place['reviews'].insert(0, {
               'user': {
                 'name': currentUserName,
@@ -82,9 +84,14 @@ class _DetailScreenState extends State<DetailScreen> {
             });
             
             _selectedRating = 5;
+            _selectedFilter = 'Terbaru'; 
           });
           
           _reviewController.clear();
+
+          // --- TRIGGER NOTIFIKASI FCM DI SINI ---
+          await Provider.of<ReviewProvider>(context, listen: false)
+              .triggerNotification(widget.place['name'] ?? 'Tempat Kuliner', currentUserName);
 
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -122,6 +129,33 @@ class _DetailScreenState extends State<DetailScreen> {
   Widget build(BuildContext context) {
     final place = widget.place;
 
+    List<dynamic> sortedReviews = List.from(place['reviews'] ?? []);
+    
+    sortedReviews.sort((a, b) {
+      if (_selectedFilter == 'Terbaru') {
+        DateTime dateA = DateTime.tryParse(a['created_at'].toString()) ?? DateTime.now();
+        DateTime dateB = DateTime.tryParse(b['created_at'].toString()) ?? DateTime.now();
+        return dateB.compareTo(dateA); 
+      } else if (_selectedFilter == 'Tertinggi') {
+        int ratingA = a['rating_keaslian'] ?? 0;
+        int ratingB = b['rating_keaslian'] ?? 0;
+        return ratingB.compareTo(ratingA); 
+      } else { 
+        int ratingA = a['rating_keaslian'] ?? 0;
+        int ratingB = b['rating_keaslian'] ?? 0;
+        return ratingA.compareTo(ratingB); 
+      }
+    });
+
+    List<String> imageUrls = [];
+    imageUrls.add(place['main_image'] ?? 'https://via.placeholder.com/600x400');
+    if (place['foto_depan'] != null && place['foto_depan'].toString().isNotEmpty) {
+      imageUrls.add(place['foto_depan']);
+    }
+    if (place['foto_menu'] != null && place['foto_menu'].toString().isNotEmpty) {
+      imageUrls.add(place['foto_menu']);
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFF9F9FF),
       body: CustomScrollView(
@@ -131,7 +165,9 @@ class _DetailScreenState extends State<DetailScreen> {
             pinned: true,
             backgroundColor: const Color(0xFF0058BC),
             iconTheme: const IconThemeData(color: Colors.white),
-            flexibleSpace: FlexibleSpaceBar(
+          flexibleSpace: FlexibleSpaceBar(
+              centerTitle: false, 
+              titlePadding: const EdgeInsets.only(left: 48.0, bottom: 16.0), 
               title: Text(
                 place['name'] ?? 'Detail Kuliner',
                 style: const TextStyle(
@@ -140,11 +176,62 @@ class _DetailScreenState extends State<DetailScreen> {
                   shadows: [Shadow(color: Colors.black54, blurRadius: 4)],
                 ),
               ),
-              background: Image.network(
-                place['main_image'] ?? 'https://via.placeholder.com/600x400',
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) =>
-                    Container(color: Colors.grey, child: const Icon(Icons.broken_image)),
+              background: Stack(
+                fit: StackFit.expand,
+                children: [
+                  PageView.builder(
+                    itemCount: imageUrls.length,
+                    onPageChanged: (index) {
+                      setState(() {
+                        _currentImageIndex = index;
+                      });
+                    },
+                    itemBuilder: (context, index) {
+                      return Image.network(
+                        imageUrls[index],
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) =>
+                            Container(color: Colors.grey, child: const Icon(Icons.broken_image, size: 50, color: Colors.white)),
+                      );
+                    },
+                  ),
+                  IgnorePointer(
+                    child: const DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.center,
+                          colors: [Colors.black87, Colors.transparent],
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (imageUrls.length > 1)
+                    IgnorePointer(
+                      child: Align(
+                        alignment: Alignment.bottomCenter,
+                        child: Padding(
+                          padding: const EdgeInsets.only(bottom: 20.0),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: List.generate(
+                              imageUrls.length,
+                              (index) => AnimatedContainer(
+                                duration: const Duration(milliseconds: 300),
+                                margin: const EdgeInsets.symmetric(horizontal: 4.0),
+                                height: 8.0,
+                                width: _currentImageIndex == index ? 24.0 : 8.0,
+                                decoration: BoxDecoration(
+                                  color: _currentImageIndex == index ? Colors.white : Colors.white54,
+                                  borderRadius: BorderRadius.circular(4.0),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
           ),
@@ -179,44 +266,43 @@ class _DetailScreenState extends State<DetailScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                 InkWell(
-  onTap: () {
-    // Saat alamat diklik, lemparkan user kembali ke HomeScreen
-    // TAPI paksa buka tab Eksplor (index 1) dan bawa data tempatnya!
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(
-        builder: (context) => HomeScreen(
-          initialIndex: 1, 
-          selectedPlace: place, // Titipkan data kuliner ini
-        ),
-      ),
-      (route) => false,
-    );
-  },
-  borderRadius: BorderRadius.circular(8),
-  child: Padding(
-    padding: const EdgeInsets.symmetric(vertical: 4.0),
-    child: Row(
-      children: [
-        const Icon(Icons.location_on, color: Colors.redAccent, size: 20),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            "${place['address'] ?? '-'} (Lihat Peta)", // Tambah hint teks
-            style: const TextStyle(
-              color: Color(0xFF0058BC), // Warna biru layaknya link aktif
-              fontSize: 14, 
-              height: 1.5,
-              fontWeight: FontWeight.bold,
-              decoration: TextDecoration.underline, // Beri garis bawah
-            ),
-          ),
-        ),
-      ],
-    ),
-  ),
-),
+                  
+                  InkWell(
+                    onTap: () {
+                      Navigator.pushAndRemoveUntil(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => HomeScreen(
+                            initialIndex: 1, 
+                            selectedPlace: place, 
+                          ),
+                        ),
+                        (route) => false,
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4.0),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.location_on, color: Colors.redAccent, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              "${place['address'] ?? '-'} (Lihat Peta)",
+                              style: const TextStyle(
+                                color: Color(0xFF0058BC), 
+                                fontSize: 14, 
+                                height: 1.5,
+                                fontWeight: FontWeight.bold,
+                                decoration: TextDecoration.underline, 
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 24),
                   
                   const Text('Cerita Rasa', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
@@ -229,7 +315,6 @@ class _DetailScreenState extends State<DetailScreen> {
                   const Divider(),
                   const SizedBox(height: 16),
 
-                  // --- FORM KIRIM ULASAN ---
                   const Text('Beri Penilaian "Keaslian Rasa"', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
                   
@@ -290,14 +375,46 @@ class _DetailScreenState extends State<DetailScreen> {
                   const Divider(),
                   const SizedBox(height: 16),
 
-                  // --- DAFTAR ULASAN DENGAN DESAIN ALA MEDSOS ---
-                  const Text('Ulasan Hunter Lainnya', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Ulasan Hunter Lainnya', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _selectedFilter,
+                            icon: const Icon(Icons.filter_list, size: 18, color: Color(0xFF0058BC)),
+                            style: const TextStyle(fontSize: 13, color: Colors.black87, fontWeight: FontWeight.bold),
+                            onChanged: (String? newValue) {
+                              if (newValue != null) {
+                                setState(() {
+                                  _selectedFilter = newValue; 
+                                });
+                              }
+                            },
+                            items: <String>['Terbaru', 'Tertinggi', 'Terendah']
+                                .map<DropdownMenuItem<String>>((String value) {
+                              return DropdownMenuItem<String>(
+                                value: value,
+                                child: Text(value),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 16),
                   
-                  if (place['reviews'] != null && place['reviews'].isNotEmpty)
-                    ...place['reviews'].map<Widget>((review) {
-                      
-                      // Ambil nama user dan URL avatar (kalau ada)
+                  if (sortedReviews.isNotEmpty)
+                    ...sortedReviews.map<Widget>((review) {
                       String reviewerName = review['user'] != null ? review['user']['name'] : 'Hunter Anonim';
                       String? avatarUrl = review['user'] != null ? review['user']['avatar_url'] : null;
 
@@ -307,22 +424,18 @@ class _DetailScreenState extends State<DetailScreen> {
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(16),
-                         border: Border.all(color: Colors.grey.shade200),
+                          border: Border.all(color: Colors.grey.shade200),
                         ),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // 1. BAGIAN FOTO PROFIL (AVATAR)
-                          // 1. BAGIAN FOTO PROFIL (AVATAR)
                             ClipOval(
                               child: Image.network(
                                 avatarUrl ?? 'https://ui-avatars.com/api/?name=$reviewerName&background=0058BC&color=fff',
-                                width: 44, // Lebar sama dengan radius 22 x 2
+                                width: 44, 
                                 height: 44,
                                 fit: BoxFit.cover,
                                 errorBuilder: (context, error, stackTrace) {
-                                  // PERISAI: Jika gambar 404 (zombie/terhapus), 
-                                  // otomatis ganti ke gambar inisial UI-Avatars, aplikasi aman dari layar merah!
                                   return Image.network(
                                     'https://ui-avatars.com/api/?name=$reviewerName&background=0058BC&color=fff',
                                     width: 44,
@@ -333,7 +446,6 @@ class _DetailScreenState extends State<DetailScreen> {
                             ),
                             const SizedBox(width: 16),
                             
-                            // 2. BAGIAN KONTEN KOMENTAR
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,

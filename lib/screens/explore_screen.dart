@@ -1,16 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:url_launcher/url_launcher.dart'; // Import package baru
 
 class ExploreScreen extends StatelessWidget {
   final Map<String, dynamic>? selectedPlace;
 
   const ExploreScreen({super.key, this.selectedPlace});
 
+  // --- FUNGSI MEMBUKA GOOGLE MAPS ---
+  Future<void> _bukaGoogleMaps(BuildContext context, double lat, double lng) async {
+    // Format URL untuk membuka mode "Direction" (Rute) di Google Maps
+    final String googleMapsUrl = "https://www.google.com/maps/dir/?api=1&destination=$lat,$lng";
+    final Uri uri = Uri.parse(googleMapsUrl);
+
+    try {
+      // Buka URL di aplikasi eksternal (Google Maps)
+      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+        throw 'Gagal membuka peta.';
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Tidak dapat membuka Google Maps')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Mengecek apakah Laravel mengirimkan data 'latitude' dan 'longitude'
-    // Jika tidak ada data, peta otomatis terpusat di Indramayu
     final double lat = selectedPlace != null && selectedPlace!['latitude'] != null 
         ? double.parse(selectedPlace!['latitude'].toString()) 
         : -6.3276326; 
@@ -25,14 +44,14 @@ class ExploreScreen extends StatelessWidget {
       backgroundColor: const Color(0xFFF9F9FF),
       body: Column(
         children: [
-          // --- BAGIAN ATAS: PETA INTERAKTIF ASLI ---
+          // --- BAGIAN ATAS: PETA INTERAKTIF ---
           SizedBox(
             height: 350, 
             width: double.infinity,
             child: FlutterMap(
               options: MapOptions(
                 initialCenter: centerLocation,
-                initialZoom: 15.0, // Level zoom awal (bisa di-scroll pakai jari nanti)
+                initialZoom: 15.0,
               ),
               children: [
                 TileLayer(
@@ -41,7 +60,7 @@ class ExploreScreen extends StatelessWidget {
                 ),
                 MarkerLayer(
                   markers: [
-                    if (selectedPlace != null) // Hanya munculkan pin merah jika diklik dari Detail
+                    if (selectedPlace != null)
                       Marker(
                         point: centerLocation,
                         width: 80,
@@ -58,7 +77,7 @@ class ExploreScreen extends StatelessWidget {
             ),
           ),
           
-          // --- BAGIAN BAWAH: INFO TEMPAT ---
+          // --- BAGIAN BAWAH: INFO & TOMBOL RUTE ---
           Expanded(
             child: Padding(
               padding: const EdgeInsets.all(20.0),
@@ -72,20 +91,45 @@ class ExploreScreen extends StatelessWidget {
                     style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF414755)),
                   ),
                   const SizedBox(height: 8),
-                  if (selectedPlace != null)
+                  
+                  if (selectedPlace != null) ...[
                     Text(
                       selectedPlace!['address'] ?? '-',
                       style: const TextStyle(color: Colors.grey, height: 1.5),
                     ),
-                  const SizedBox(height: 20),
-                  const Expanded(
-                    child: Center(
-                      child: Text(
-                        'Daftar kuliner terdekat akan muncul di sini nanti.',
-                        style: TextStyle(color: Colors.grey),
+                    const SizedBox(height: 20),
+                    
+                    // --- TOMBOL RUTE (DIRECTION) ---
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () => _bukaGoogleMaps(context, lat, lng),
+                        icon: const Icon(Icons.directions),
+                        label: const Text(
+                          'Rute ke Sini',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0058BC), // Warna biru tema aplikasimu
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
                       ),
                     ),
-                  )
+                  ],
+
+                  if (selectedPlace == null)
+                    const Expanded(
+                      child: Center(
+                        child: Text(
+                          'Pilih kuliner dari Beranda untuk melihat rute.',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ),
+                    )
                 ],
               ),
             ),

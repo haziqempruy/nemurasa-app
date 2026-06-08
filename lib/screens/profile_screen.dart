@@ -23,7 +23,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? _avatarUrl;
 
   // Sesuaikan dengan IP laptopmu
-  final String _baseUrl = 'http://192.168.0.136:8000/api';
+  final String _baseUrl = 'http://192.168.0.70:8000/api';
   
   // Ubah dari 'final int = 1' menjadi variabel dinamis
   int _currentUserId = 0; 

@@ -1,23 +1,18 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart'; 
-
-// --- TAMBAHAN IMPORT PROVIDER ---
-import 'package:provider/provider.dart'; 
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
 import '../providers/review_provider.dart'; 
-// --------------------------------
-
-import 'detail_screen.dart';
-import 'profile_screen.dart';
-import 'login_screen.dart'; 
 import 'explore_screen.dart';
+import 'profile_screen.dart';
+import 'detail_screen.dart'; 
+import 'login_screen.dart'; 
 
 class HomeScreen extends StatefulWidget {
-  final int initialIndex; // Tambahkan ini
-  final Map<String, dynamic>? selectedPlace; // Tambahkan ini
+  final int initialIndex; 
+  final Map<String, dynamic>? selectedPlace; 
 
-  // Beri nilai default index 0 (Beranda) agar jika dibuka biasa tidak error
   const HomeScreen({super.key, this.initialIndex = 0, this.selectedPlace});
 
   @override
@@ -25,16 +20,23 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  late int _selectedIndex; // Ubah menjadi late
-  
+  late int _selectedIndex; 
   List<dynamic> _places = [];
   bool _isLoading = true;
   String _userName = 'Tamu'; 
 
+  // ⚠️ PASTIKAN IP INI SESUAI DENGAN IP LAPTOPMU SAAT INI
+  final String _baseUrl = 'http://192.168.0.70:8000/api'; 
+
+  // --- VARIABEL UNTUK SEARCH & FILTER ---
+  String _searchQuery = '';
+  String _selectedCategory = 'Semua';
+  final List<String> _categories = ['Semua', 'Makanan Berat', 'Cemilan', 'Minuman'];
+
   @override
   void initState() {
     super.initState();
-    _selectedIndex = widget.initialIndex; // Set index sesuai titipan
+    _selectedIndex = widget.initialIndex; 
     
     _loadUserSession(); 
     _fetchPlaces(); 
@@ -45,155 +47,175 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     });
   }
-  // --- FUNGSI BARU: Ambil Nama dari Brankas ---
+
   Future<void> _loadUserSession() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      // Ambil nama dari brankas, jika kosong default ke 'Hunter'
-      String fullName = prefs.getString('user_name') ?? 'Hunter';
-      // Potong agar yang tampil hanya kata pertama (nama panggilan)
-      _userName = fullName.split(' ')[0];
+      _userName = prefs.getString('user_name') ?? 'Hunter';
     });
   }
 
-// --- FUNGSI 1: Proses Eksekusi Logout ---
-  Future<void> _executeLogout() async {
+  Future<void> _fetchPlaces() async {
+    try {
+      final response = await http.get(Uri.parse('$_baseUrl/places'));
+
+      if (response.statusCode == 200) {
+        if (mounted) {
+          setState(() {
+            final decodedData = json.decode(response.body);
+            
+            // LOGIKA PINTAR PEMBACA JSON YANG SUDAH DIPERBAIKI
+            if (decodedData is List) {
+              _places = decodedData; 
+            } else if (decodedData is Map && decodedData.containsKey('data')) {
+              _places = decodedData['data']; 
+            } else {
+              _places = []; 
+            }
+            
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      print(e);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  // --- FUNGSI LOGOUT UTAMA ---
+  Future<void> _logout() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.clear(); // Hapus token dan semua data di brankas
-    
+    await prefs.clear(); 
     if (mounted) {
-      // Lempar kembali ke halaman Login dan hapus histori rute
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (context) => const LoginScreen()),
-        (route) => false,
+        (route) => false, 
       );
     }
   }
 
-  // --- FUNGSI 2: Menampilkan Pop-up Konfirmasi ---
-  void _showLogoutConfirmation() {
-    showDialog(
+  // --- FUNGSI POP-UP KONFIRMASI LOGOUT ---
+  Future<void> _showLogoutConfirmation() async {
+    return showDialog<void>(
       context: context,
-      builder: (context) {
+      barrierDismissible: false, // Memaksa user untuk menekan salah satu tombol
+      builder: (BuildContext context) {
         return AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Keluar Aplikasi', style: TextStyle(fontWeight: FontWeight.bold)),
-          content: const Text('Apakah kamu yakin ingin keluar dari NemuRasa?'),
-          actions: [
+          title: const Text(
+            'Konfirmasi Keluar', 
+            style: TextStyle(fontWeight: FontWeight.bold)
+          ),
+          content: const Text('Apakah kamu yakin ingin keluar dari aplikasi NemuRasa?'),
+          actions: <Widget>[
             TextButton(
-              onPressed: () => Navigator.pop(context), // Tutup dialog jika Batal
-              child: const Text('Batal', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+              onPressed: () {
+                Navigator.of(context).pop(); // Tutup dialog, batalkan logout
+              },
+              child: const Text('Batal', style: TextStyle(color: Colors.grey)),
             ),
             ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context); // Tutup dialog dulu
-                _executeLogout(); // Baru jalankan proses logout
-              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.redAccent,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
-              child: const Text('Logout', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              onPressed: () {
+                Navigator.of(context).pop(); // Tutup dialog dulu
+                _logout(); // Baru jalankan fungsi logout yang asli
+              },
+              child: const Text('Keluar', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ],
         );
-      }
+      },
     );
   }
 
-  // Fungsi Asynchronous untuk mengambil API
-  Future<void> _fetchPlaces() async {
-    // Pastikan IP ini selalu sama dengan IP yang sedang aktif ya!
-    const String apiUrl = 'http://192.168.0.136:8000/api/places'; 
-
-    try {
-      final response = await http.get(Uri.parse(apiUrl));
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        setState(() {
-          _places = data['data']; 
-          _isLoading = false;
-        });
-      } else {
-        debugPrint("Gagal mengambil data. Status code: ${response.statusCode}");
-        setState(() => _isLoading = false);
-      }
-    } catch (e) {
-      debugPrint("Error fetching data: $e");
-      setState(() => _isLoading = false);
-    }
+  List<dynamic> get _filteredPlaces {
+    return _places.where((place) {
+      final name = place['name']?.toString().toLowerCase() ?? '';
+      final category = place['category']?.toString() ?? 'Makanan Berat'; 
+      
+      final matchesSearch = name.contains(_searchQuery.toLowerCase());
+      final matchesCategory = _selectedCategory == 'Semua' || category == _selectedCategory;
+      
+      return matchesSearch && matchesCategory;
+    }).toList();
   }
 
- void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-    
-    
-    if (index == 0) {
-      _fetchPlaces(); 
-    }
-  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF9F9FF),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: const Color(0xFFF9F9FF),
         elevation: 0,
+        scrolledUnderElevation: 0, 
         title: Row(
           children: [
-            Image.asset(
-              'assets/images/nemurasa-logo.png', // Logo kamu aman di sini
-              height: 36, 
-              fit: BoxFit.contain,
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Image.asset('assets/images/nemurasa-logo.png'),
             ),
-            const SizedBox(width: 12), 
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Halo, $_userName! 👋', // Menggunakan variabel state yang baru
-                    style: const TextStyle(
-                      color: Color(0xFF414755),
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis, 
-                  ),
-                  const Text(
-                    'Mau eksplor rasa apa hari ini?',
-                    style: TextStyle(color: Colors.grey, fontSize: 12),
-                  ),
-                ],
+            const SizedBox(width: 12),
+            const Text(
+              'NemuRasa',
+              style: TextStyle(
+                fontSize: 22, 
+                fontWeight: FontWeight.bold, 
+                color: Color(0xFF0058BC),
+                letterSpacing: -0.5,
               ),
             ),
           ],
         ),
         actions: [
+          // --- TOMBOL NOTIFIKASI UNTUK TUBES ---
+          IconButton(
+            icon: const Icon(Icons.notifications_none, color: Color(0xFF0058BC)),
+            tooltip: 'Notifikasi',
+            onPressed: () {
+              // TODO: Masukkan logika pemanggilan Notifikasi (Local/FCM) di sini nanti
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Menu Notifikasi belum diimplementasikan.')),
+              );
+            },
+          ),
+          // --- TOMBOL LOGOUT ---
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.redAccent),
             tooltip: 'Keluar',
-            onPressed: _showLogoutConfirmation, 
+            onPressed: _showLogoutConfirmation, // <-- Memanggil Pop-up Konfirmasi
           ),
+          const SizedBox(width: 8),
         ],
       ),
-body: _selectedIndex == 0 
-       ? _buildHomeContent() 
-       : _selectedIndex == 1 // Jika index 1, panggil ExploreScreen
-           ? ExploreScreen(selectedPlace: widget.selectedPlace) 
-           : const ProfileScreen(),
+      body: _selectedIndex == 0 
+          ? _buildHomeContent() 
+          : _selectedIndex == 1 
+              ? ExploreScreen(selectedPlace: widget.selectedPlace) 
+              : const ProfileScreen(),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
+        onTap: (index) {
+          setState(() {
+            _selectedIndex = index;
+          });
+        },
         selectedItemColor: const Color(0xFF0058BC),
         unselectedItemColor: Colors.grey,
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: 'Beranda'),
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Beranda'),
           BottomNavigationBarItem(icon: Icon(Icons.explore), label: 'Eksplor'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profil'),
         ],
@@ -202,98 +224,212 @@ body: _selectedIndex == 0
   }
 
   Widget _buildHomeContent() {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
+    final placesToShow = _filteredPlaces;
 
-    if (_places.isEmpty) {
-      return const Center(child: Text('Belum ada data kuliner legendaris.'));
-    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20.0, 10.0, 20.0, 20.0),
+          child: Text(
+            'Mau hunting kuliner apa hari ini, $_userName?',
+            style: TextStyle(fontSize: 15, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+          ),
+        ),
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(16.0),
-      itemCount: _places.length,
-      itemBuilder: (context, index) {
-        final place = _places[index];
-        
-        return InkWell(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => DetailScreen(place: place),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20.0),
+          child: TextField(
+            onChanged: (value) {
+              setState(() {
+                _searchQuery = value;
+              });
+            },
+            decoration: InputDecoration(
+              hintText: 'Cari nama kuliner...',
+              prefixIcon: const Icon(Icons.search, color: Colors.grey),
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding: const EdgeInsets.symmetric(vertical: 0),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
               ),
-            );
-          },
-          child: Card(
-            margin: const EdgeInsets.only(bottom: 16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            elevation: 2,
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Image.network(
-                  place['main_image'] ?? 'https://via.placeholder.com/600x400',
-                  height: 180,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => 
-                      Container(height: 180, color: Colors.grey, child: const Icon(Icons.broken_image)),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (place['is_premium'] == 1)
-                              Container(
-                                margin: const EdgeInsets.only(bottom: 4),
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Colors.amber,
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: const Text(
-                                  'SPONSORED',
-                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
-                                ),
-                              ),
-                            Text(
-                              place['name'] ?? 'Tanpa Nama',
-                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                const Icon(Icons.location_on, size: 14, color: Colors.grey),
-                                const SizedBox(width: 4),
-                                Expanded(
-                                  child: Text(
-                                    place['address'] ?? '-', 
-                                    style: const TextStyle(color: Colors.grey, fontSize: 12),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
             ),
           ),
-        );
-      },
+        ),
+        const SizedBox(height: 16),
+
+        SizedBox(
+          height: 40,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            itemCount: _categories.length,
+            itemBuilder: (context, index) {
+              final category = _categories[index];
+              final isSelected = _selectedCategory == category;
+
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                child: ChoiceChip(
+                  label: Text(category),
+                  selected: isSelected,
+                  selectedColor: const Color(0xFF0058BC),
+                  labelStyle: TextStyle(
+                    color: isSelected ? Colors.white : Colors.black87,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  ),
+                  backgroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    side: BorderSide(
+                      color: isSelected ? const Color(0xFF0058BC) : Colors.grey.shade300,
+                    ),
+                  ),
+                  onSelected: (bool selected) {
+                    setState(() {
+                      _selectedCategory = category;
+                    });
+                  },
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 20.0),
+          child: Text('Rekomendasi NemuRasa', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        ),
+        const SizedBox(height: 12),
+
+        Expanded(
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : placesToShow.isEmpty
+                  ? Center(
+                      child: Text(
+                        'Tidak ada kuliner yang cocok dengan "$_searchQuery"\natau kategori "$_selectedCategory".',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.grey),
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                      itemCount: placesToShow.length,
+                      itemBuilder: (context, index) {
+                        final place = placesToShow[index];
+                        
+                        double rating = 5.0;
+                        if (place['reviews'] != null && place['reviews'].length > 0) {
+                          double total = 0;
+                          for (var r in place['reviews']) {
+                            total += (r['rating_keaslian'] ?? 5);
+                          }
+                          rating = total / place['reviews'].length;
+                        }
+
+                        return GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => DetailScreen(place: place),
+                              ),
+                            );
+                          },
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 16),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: Colors.grey.shade200),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.03),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                )
+                              ],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                ClipRRect(
+                                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                                  child: Image.network(
+                                    place['main_image'] ?? 'https://via.placeholder.com/600x400',
+                                    height: 150,
+                                    width: double.infinity,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) =>
+                                        Container(height: 150, color: Colors.grey, child: const Icon(Icons.broken_image)),
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.all(16.0),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              place['name'] ?? 'Tanpa Nama',
+                                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              place['category'] ?? 'Makanan Berat', 
+                                              style: const TextStyle(fontSize: 12, color: Color(0xFF0058BC), fontWeight: FontWeight.bold),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              place['address'] ?? '-',
+                                              style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: Colors.amber.shade100,
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            const Icon(Icons.star, color: Colors.amber, size: 16),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              rating.toStringAsFixed(1),
+                                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                            ),
+                                          ],
+                                        ),
+                                      )
+                                    ],
+                                  ),
+                                )
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+        ),
+      ],
     );
   }
 }
